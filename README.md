@@ -275,6 +275,18 @@ quantitative_analysis/
 - `stock_balance_sheet` - 资产负债表
 - `stock_cash_flow` - 现金流量表
 
+### 数据库初始化
+
+数据库表结构 SQL 文件位于 `migrations/schema.sql`，包含 25 张表的完整定义。
+
+```bash
+# 创建数据库
+mysql -u root -p -e "CREATE DATABASE stock_cursor CHARACTER SET utf8mb4;"
+
+# 导入表结构
+mysql -u root -p stock_cursor < migrations/schema.sql
+```
+
 ## 配置说明
 
 ### 数据库配置 (.env)
