@@ -1,0 +1,248 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}技术分析{% endblock %}
+
+{% block extra_css %}
+<style>
+#main-chart, #indicator-chart {
+    width: 100%;
+    height: 400px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 24px;">
+    <h1 style="font-size: 18px; font-weight: 600;">技术分析</h1>
+</div>
+
+<!-- 股票选择 -->
+<div class="card" style="margin-bottom: 20px;">
+    <form id="stock-form" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">股票代码</label>
+            <input type="text" id="stock-input" value="000001.SZ" style="width: 150px;">
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">周期</label>
+            <select id="period-select" style="width: 100px;">
+                <option value="30">30天</option>
+                <option value="60" selected>60天</option>
+                <option value="120">120天</option>
+                <option value="250">250天</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">图表</label>
+            <select id="chart-type-select" style="width: 120px;">
+                <option value="candlestick">K线</option>
+                <option value="line">折线</option>
+            </select>
+        </div>
+        <button type="submit">分析</button>
+    </form>
+</div>
+
+<!-- 关键指标 -->
+<div id="metrics-section" style="display: none; margin-bottom: 20px;">
+    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+        <div class="card" style="flex: 1; min-width: 120px; text-align: center;">
+            <div style="font-size: 20px; font-weight: 600;" id="current-price">--</div>
+            <div style="font-size: 12px; color: #666;">价格</div>
+        </div>
+        <div class="card" style="flex: 1; min-width: 120px; text-align: center;">
+            <div style="font-size: 20px; font-weight: 600;" id="price-change">--</div>
+            <div style="font-size: 12px; color: #666;">涨跌幅</div>
+        </div>
+        <div class="card" style="flex: 1; min-width: 120px; text-align: center;">
+            <div style="font-size: 20px; font-weight: 600;" id="volume">--</div>
+            <div style="font-size: 12px; color: #666;">成交量</div>
+        </div>
+        <div class="card" style="flex: 1; min-width: 120px; text-align: center;">
+            <div style="font-size: 20px; font-weight: 600;" id="turnover">--</div>
+            <div style="font-size: 12px; color: #666;">成交额</div>
+        </div>
+    </div>
+</div>
+
+<!-- 主图表 -->
+<div id="main-chart-section" class="card" style="display: none; margin-bottom: 20px;">
+    <div class="card-title">价格图表</div>
+    <div id="main-chart"></div>
+</div>
+
+<!-- 指标选择 -->
+<div id="indicators-section" style="display: none; margin-bottom: 20px;">
+    <div style="display: flex; gap: 8px; border-bottom: 1px solid #e5e5e5; padding-bottom: 8px; margin-bottom: 16px;">
+        <button class="indicator-tab active" data-indicator="macd" style="border: none; background: none; padding: 6px 12px; cursor: pointer; font-size: 13px;">MACD</button>
+        <button class="indicator-tab" data-indicator="kdj" style="border: none; background: none; padding: 6px 12px; cursor: pointer; font-size: 13px;">KDJ</button>
+        <button class="indicator-tab" data-indicator="rsi" style="border: none; background: none; padding: 6px 12px; cursor: pointer; font-size: 13px;">RSI</button>
+        <button class="indicator-tab" data-indicator="boll" style="border: none; background: none; padding: 6px 12px; cursor: pointer; font-size: 13px;">BOLL</button>
+    </div>
+    <div id="indicator-chart"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script>
+let currentStock = '000001.SZ';
+let currentPeriod = 60;
+let chartType = 'candlestick';
+let currentIndicator = 'macd';
+let historyData = [];
+let factorsData = [];
+let mainChart = null;
+let indicatorChart = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const stockParam = urlParams.get('stock');
+    if (stockParam) {
+        document.getElementById('stock-input').value = stockParam;
+    }
+
+    document.getElementById('stock-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        currentStock = document.getElementById('stock-input').value.trim();
+        currentPeriod = parseInt(document.getElementById('period-select').value);
+        chartType = document.getElementById('chart-type-select').value;
+        loadData();
+    });
+
+    document.querySelectorAll('.indicator-tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+            document.querySelectorAll('.indicator-tab').forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            currentIndicator = this.dataset.indicator;
+            renderIndicatorChart();
+        });
+    });
+
+    if (document.getElementById('stock-input').value) {
+        loadData();
+    }
+});
+
+async function loadData() {
+    try {
+        const [stockRes, historyRes, factorsRes] = await Promise.all([
+            apiRequest(`/stocks/${currentStock}`).catch(() => ({ code: 404 })),
+            apiRequest(`/stocks/${currentStock}/history?limit=${currentPeriod}`),
+            apiRequest(`/stocks/${currentStock}/factors?limit=${currentPeriod}`)
+        ]);
+
+        if (historyRes.code === 200 && factorsRes.code === 200) {
+            historyData = historyRes.data || [];
+            factorsData = factorsRes.data || [];
+
+            document.getElementById('metrics-section').style.display = 'block';
+            document.getElementById('main-chart-section').style.display = 'block';
+            document.getElementById('indicators-section').style.display = 'block';
+
+            renderMetrics(historyData);
+            initMainChart();
+            initIndicatorChart();
+        }
+    } catch (error) {
+        console.error('加载数据失败:', error);
+    }
+}
+
+function renderMetrics(data) {
+    if (!data || data.length === 0) return;
+    const latest = data[0];
+    const previous = data[1];
+    const currentPrice = latest.close || 0;
+    const priceChange = previous ? ((currentPrice - previous.close) / previous.close * 100) : 0;
+
+    document.getElementById('current-price').textContent = currentPrice.toFixed(2);
+    document.getElementById('price-change').textContent = (priceChange >= 0 ? '+' : '') + priceChange.toFixed(2) + '%';
+    document.getElementById('price-change').style.color = priceChange >= 0 ? '#c00' : '#0a0';
+    document.getElementById('volume').textContent = (latest.vol / 10000).toFixed(1) + '万';
+    document.getElementById('turnover').textContent = (latest.amount / 100000000).toFixed(2) + '亿';
+}
+
+function initMainChart() {
+    mainChart = echarts.init(document.getElementById('main-chart'));
+    renderMainChart();
+    window.addEventListener('resize', () => mainChart.resize());
+}
+
+function renderMainChart() {
+    const reversedData = [...historyData].reverse();
+    const dates = reversedData.map(item => item.trade_date);
+    const klineData = reversedData.map(item => [item.open, item.close, item.low, item.high]);
+    const lineData = reversedData.map(item => item.close);
+
+    const option = {
+        tooltip: { trigger: 'axis' },
+        xAxis: { type: 'category', data: dates, boundaryGap: false },
+        yAxis: { scale: true },
+        series: [{
+            name: chartType === 'candlestick' ? 'K' : '价格',
+            type: chartType === 'candlestick' ? 'candlestick' : 'line',
+            data: chartType === 'candlestick' ? klineData : lineData,
+            itemStyle: chartType === 'candlestick' ? {
+                color: '#ef232a', color0: '#14b143', borderColor: '#ef232a', borderColor0: '#14b143'
+            } : { color: '#0066cc' }
+        }]
+    };
+    mainChart.setOption(option);
+}
+
+function initIndicatorChart() {
+    indicatorChart = echarts.init(document.getElementById('indicator-chart'));
+    renderIndicatorChart();
+}
+
+function renderIndicatorChart() {
+    const reversedFactors = [...factorsData].reverse();
+    const dates = reversedFactors.map(item => item.trade_date);
+
+    let series = [];
+    let title = '';
+
+    if (currentIndicator === 'macd') {
+        title = 'MACD';
+        series = [
+            { name: 'MACD', type: 'bar', data: reversedFactors.map(item => item.macd || 0), itemStyle: { color: item => item.macd >= 0 ? '#ef232a' : '#14b143' } },
+            { name: 'DIF', type: 'line', data: reversedFactors.map(item => item.macd_dif || 0), itemStyle: { color: '#5470c6' } },
+            { name: 'DEA', type: 'line', data: reversedFactors.map(item => item.macd_dea || 0), itemStyle: { color: '#fac858' } }
+        ];
+    } else if (currentIndicator === 'kdj') {
+        title = 'KDJ';
+        series = [
+            { name: 'K', type: 'line', data: reversedFactors.map(item => item.kdj_k || 0), itemStyle: { color: '#5470c6' } },
+            { name: 'D', type: 'line', data: reversedFactors.map(item => item.kdj_d || 0), itemStyle: { color: '#91cc75' } },
+            { name: 'J', type: 'line', data: reversedFactors.map(item => item.kdj_j || 0), itemStyle: { color: '#fac858' } }
+        ];
+    } else if (currentIndicator === 'rsi') {
+        title = 'RSI';
+        series = [
+            { name: 'RSI6', type: 'line', data: reversedFactors.map(item => item.rsi_6 || 0), itemStyle: { color: '#5470c6' } },
+            { name: 'RSI12', type: 'line', data: reversedFactors.map(item => item.rsi_12 || 0), itemStyle: { color: '#91cc75' } },
+            { name: 'RSI24', type: 'line', data: reversedFactors.map(item => item.rsi_24 || 0), itemStyle: { color: '#fac858' } }
+        ];
+    } else if (currentIndicator === 'boll') {
+        title = 'BOLL';
+        series = [
+            { name: '收盘价', type: 'line', data: reversedFactors.map(item => item.close || 0), itemStyle: { color: '#5470c6' } },
+            { name: '上轨', type: 'line', data: reversedFactors.map(item => item.boll_upper || 0), itemStyle: { color: '#ef232a' } },
+            { name: '中轨', type: 'line', data: reversedFactors.map(item => item.boll_mid || 0), itemStyle: { color: '#fac858' } },
+            { name: '下轨', type: 'line', data: reversedFactors.map(item => item.boll_lower || 0), itemStyle: { color: '#14b143' } }
+        ];
+    }
+
+    const option = {
+        title: { text: title, left: 'left' },
+        tooltip: { trigger: 'axis' },
+        legend: { data: series.map(s => s.name), top: 30 },
+        xAxis: { type: 'category', data: dates },
+        yAxis: { type: 'value' },
+        series: series
+    };
+    indicatorChart.setOption(option);
+}
+</script>
+{% endblock %}

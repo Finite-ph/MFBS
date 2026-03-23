@@ -1,0 +1,114 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}首页{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 32px;">
+    <h1 style="font-size: 20px; font-weight: 600; margin-bottom: 8px;">量化分析系统</h1>
+    <p style="color: #666;">多因子量化投资研究平台</p>
+</div>
+
+<hr class="divider">
+
+<!-- 功能导航 -->
+<div style="margin-bottom: 32px;">
+    <h2 style="font-size: 14px; font-weight: 500; color: #666; margin-bottom: 16px;">功能模块</h2>
+    <div class="grid grid-4">
+        <div class="card">
+            <div class="card-title">股票</div>
+            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">浏览所有股票</p>
+            <a href="{{ url_for('main.stocks') }}">进入 →</a>
+        </div>
+        <div class="card">
+            <div class="card-title">分析</div>
+            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">K线、MACD、KDJ、RSI</p>
+            <a href="{{ url_for('main.analysis') }}">进入 →</a>
+        </div>
+        <div class="card">
+            <div class="card-title">筛选</div>
+            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">多因子股票筛选</p>
+            <a href="{{ url_for('main.screen') }}">进入 →</a>
+        </div>
+        <div class="card">
+            <div class="card-title">回测</div>
+            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">策略回测验证</p>
+            <a href="{{ url_for('main.backtest') }}">进入 →</a>
+        </div>
+    </div>
+</div>
+
+<!-- 多因子系统 -->
+<div style="margin-bottom: 32px;">
+    <h2 style="font-size: 14px; font-weight: 500; color: #666; margin-bottom: 16px;">多因子系统</h2>
+    <div class="grid grid-4">
+        <div class="card">
+            <div class="card-title">因子</div>
+            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">因子管理</p>
+            <a href="/ml-factor">进入 →</a>
+        </div>
+        <div class="card">
+            <div class="card-title">模型</div>
+            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">机器学习模型训练</p>
+            <a href="/ml-factor/models">进入 →</a>
+        </div>
+        <div class="card">
+            <div class="card-title">评分</div>
+            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">股票评分</p>
+            <a href="/ml-factor/scoring">进入 →</a>
+        </div>
+        <div class="card">
+            <div class="card-title">组合</div>
+            <p style="font-size: 13px; color: #666; margin-bottom: 12px;">组合优化</p>
+            <a href="/ml-factor/portfolio">进入 →</a>
+        </div>
+    </div>
+</div>
+
+<!-- 数据概览 -->
+<div style="margin-bottom: 32px;">
+    <h2 style="font-size: 14px; font-weight: 500; color: #666; margin-bottom: 16px;">数据概览</h2>
+    <div class="grid grid-4">
+        <div class="card" style="text-align: center;">
+            <div class="stat" id="total-stocks">--</div>
+            <div class="stat-label">股票数量</div>
+        </div>
+        <div class="card" style="text-align: center;">
+            <div class="stat" id="total-industries">--</div>
+            <div class="stat-label">行业数量</div>
+        </div>
+        <div class="card" style="text-align: center;">
+            <div class="stat" id="total-areas">--</div>
+            <div class="stat-label">地区数量</div>
+        </div>
+        <div class="card" style="text-align: center;">
+            <div class="stat">7</div>
+            <div class="stat-label">数据表</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const stocksRes = await apiRequest('/stocks?page_size=1');
+        if (stocksRes.code === 200) {
+            document.getElementById('total-stocks').textContent = stocksRes.data.total;
+        }
+
+        const industriesRes = await apiRequest('/industries');
+        if (industriesRes.code === 200) {
+            document.getElementById('total-industries').textContent = industriesRes.data.length;
+        }
+
+        const areasRes = await apiRequest('/areas');
+        if (areasRes.code === 200) {
+            document.getElementById('total-areas').textContent = areasRes.data.length;
+        }
+    } catch (error) {
+        console.error('加载数据失败:', error);
+    }
+});
+</script>
+{% endblock %}

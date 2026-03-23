@@ -1,0 +1,178 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}实时分析{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 24px;">
+    <h1 style="font-size: 18px; font-weight: 600;">实时交易分析</h1>
+    <p style="color: #666; font-size: 13px;">实时市场监控与信号分析</p>
+</div>
+
+<!-- Realtime Nav -->
+<div style="display: flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid #e5e5e5; padding-bottom: 8px;">
+    <a href="{{ url_for('main.realtime_analysis') }}" style="padding: 6px 12px; font-size: 13px;">概览</a>
+    <a href="{{ url_for('main.realtime_indicators') }}" style="padding: 6px 12px; font-size: 13px;">指标</a>
+    <a href="{{ url_for('main.realtime_signals') }}" style="padding: 6px 12px; font-size: 13px;">信号</a>
+    <a href="{{ url_for('main.realtime_monitor') }}" style="padding: 6px 12px; font-size: 13px;">监控</a>
+    <a href="{{ url_for('main.realtime_risk_management') }}" style="padding: 6px 12px; font-size: 13px;">风控</a>
+    <a href="{{ url_for('main.realtime_report_management') }}" style="padding: 6px 12px; font-size: 13px;">报告</a>
+    <a href="{{ url_for('main.websocket_management') }}" style="padding: 6px 12px; font-size: 13px;">WebSocket</a>
+</div>
+
+<!-- Status Cards -->
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;">
+    <div class="card" style="text-align: center;">
+        <div style="font-size: 20px; font-weight: 600;" id="connection-status">--</div>
+        <div style="font-size: 12px; color: #666;">连接状态</div>
+    </div>
+    <div class="card" style="text-align: center;">
+        <div style="font-size: 20px; font-weight: 600;" id="data-latency">--</div>
+        <div style="font-size: 12px; color: #666;">延迟(ms)</div>
+    </div>
+    <div class="card" style="text-align: center;">
+        <div style="font-size: 20px; font-weight: 600;" id="subscribed-stocks">0</div>
+        <div style="font-size: 12px; color: #666;">已订阅</div>
+    </div>
+    <div class="card" style="text-align: center;">
+        <div style="font-size: 20px; font-weight: 600;" id="update-count">0</div>
+        <div style="font-size: 12px; color: #666;">更新次数</div>
+    </div>
+</div>
+
+<!-- Stock Input -->
+<div class="card" style="margin-bottom: 20px;">
+    <form id="subscribe-form" style="display: flex; gap: 12px; align-items: flex-end;">
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">股票代码</label>
+            <input type="text" id="stock-input" placeholder="000001.SZ" style="width: 150px;">
+        </div>
+        <button type="submit">订阅</button>
+        <button type="button" class="secondary" id="clear-btn">清除全部</button>
+    </form>
+</div>
+
+<!-- Realtime Data -->
+<div class="card">
+    <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px;">实时数据</div>
+    <div id="realtime-data">
+        <div style="text-align: center; padding: 40px; color: #999;">订阅股票以查看实时数据</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let subscribedStocks = [];
+let updateCount = 0;
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('subscribe-form').addEventListener('submit', handleSubscribe);
+    document.getElementById('clear-btn').addEventListener('click', clearAll);
+
+    // Simulate connection status
+    document.getElementById('connection-status').textContent = '已连接';
+    document.getElementById('connection-status').style.color = '#0a0';
+});
+
+function handleSubscribe(e) {
+    e.preventDefault();
+    const stockCode = document.getElementById('stock-input').value.trim();
+
+    if (!stockCode) {
+        alert('请输入股票代码');
+        return;
+    }
+
+    if (subscribedStocks.includes(stockCode)) {
+        alert('已订阅');
+        return;
+    }
+
+    subscribedStocks.push(stockCode);
+    document.getElementById('subscribed-stocks').textContent = subscribedStocks.length;
+    document.getElementById('stock-input').value = '';
+
+    addStockToRealtimeData(stockCode);
+}
+
+function clearAll() {
+    subscribedStocks = [];
+    document.getElementById('subscribed-stocks').textContent = '0';
+    document.getElementById('realtime-data').innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">订阅股票以查看实时数据</div>';
+}
+
+function addStockToRealtimeData(stockCode) {
+    const container = document.getElementById('realtime-data');
+
+    if (container.querySelector('table')) {
+        // Add row to existing table
+        const tbody = container.querySelector('tbody');
+        const row = document.createElement('tr');
+        row.id = `stock-${stockCode}`;
+        row.innerHTML = `
+            <td><a href="/stock/${stockCode}">${stockCode}</a></td>
+            <td>--</td>
+            <td>--</td>
+            <td>--</td>
+            <td>--</td>
+            <td>--</td>
+        `;
+        tbody.appendChild(row);
+    } else {
+        // Create new table
+        container.innerHTML = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>代码</th>
+                        <th>价格</th>
+                        <th>涨跌</th>
+                        <th>成交量</th>
+                        <th>成交额</th>
+                        <th>时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr id="stock-${stockCode}">
+                        <td><a href="/stock/${stockCode}">${stockCode}</a></td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                        <td>--</td>
+                    </tr>
+                </tbody>
+            </table>
+        `;
+    }
+
+    // Simulate realtime updates
+    simulateUpdate(stockCode);
+}
+
+function simulateUpdate(stockCode) {
+    setInterval(() => {
+        const price = (Math.random() * 20 + 10).toFixed(2);
+        const change = (Math.random() * 10 - 5).toFixed(2);
+        const vol = Math.floor(Math.random() * 100000);
+        const amount = Math.floor(Math.random() * 10000000);
+        const time = new Date().toLocaleTimeString();
+
+        const row = document.getElementById(`stock-${stockCode}`);
+        if (row) {
+            const cells = row.cells;
+            cells[1].textContent = price;
+            cells[2].textContent = change + '%';
+            cells[2].style.color = change >= 0 ? '#c00' : '#0a0';
+            cells[3].textContent = vol;
+            cells[4].textContent = amount;
+            cells[5].textContent = time;
+
+            updateCount++;
+            document.getElementById('update-count').textContent = updateCount;
+            document.getElementById('data-latency').textContent = Math.floor(Math.random() * 100);
+        }
+    }, 2000);
+}
+</script>
+{% endblock %}

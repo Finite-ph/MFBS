@@ -1,0 +1,91 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}技术指标{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 24px;">
+    <h1 style="font-size: 18px; font-weight: 600;">技术指标</h1>
+    <p style="color: #666; font-size: 13px;">实时技术指标分析</p>
+</div>
+
+<!-- Config -->
+<div class="card" style="margin-bottom: 20px;">
+    <form id="calc-form" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">股票代码</label>
+            <input type="text" id="stock-code" placeholder="000001.SZ" style="width: 120px;">
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">周期</label>
+            <select id="period-type" style="width: 100px;">
+                <option value="1min">1分钟</option>
+                <option value="5min" selected>5分钟</option>
+                <option value="15min">15分钟</option>
+                <option value="60min">60分钟</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">天数</label>
+            <input type="number" id="lookback-days" value="30" style="width: 60px;">
+        </div>
+        <button type="submit">计算</button>
+    </form>
+</div>
+
+<!-- Results -->
+<div class="card">
+    <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px;">计算结果</div>
+    <div id="results">
+        <div style="text-align: center; padding: 40px; color: #999;">选择股票并点击计算</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script>
+document.getElementById('calc-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const stock = document.getElementById('stock-code').value;
+    const period = document.getElementById('period-type').value;
+    const days = document.getElementById('lookback-days').value;
+
+    document.getElementById('results').innerHTML = `
+        <div style="text-align: center; padding: 40px;">正在计算 ${stock} 指标...</div>
+    `;
+
+    // Mock results
+    setTimeout(() => {
+        document.getElementById('results').innerHTML = `
+            <div style="margin-bottom: 16px;">${stock} 指标 (${period}, ${days}天)</div>
+            <table>
+                <thead><tr><th>指标</th><th>数值</th></tr></thead>
+                <tbody>
+                    <tr><td>MA5</td><td>12.45</td></tr>
+                    <tr><td>MA10</td><td>12.32</td></tr>
+                    <tr><td>MA20</td><td>12.18</td></tr>
+                    <tr><td>RSI</td><td>58.3</td></tr>
+                    <tr><td>MACD</td><td>0.12</td></tr>
+                </tbody>
+            </table>
+            <div id="indicator-chart" style="height: 300px; margin-top: 20px;"></div>
+        `;
+        renderChart();
+    }, 500);
+});
+
+function renderChart() {
+    const chart = echarts.init(document.getElementById('indicator-chart'));
+    const data = [];
+    for (let i = 0; i < 30; i++) {
+        data.push(Math.random() * 2 + 11);
+    }
+    chart.setOption({
+        tooltip: { trigger: 'axis' },
+        xAxis: { type: 'category', data: data.map((_, i) => i) },
+        yAxis: { type: 'value' },
+        series: [{ type: 'line', data: data, lineStyle: { width: 2 } }]
+    });
+}
+</script>
+{% endblock %}

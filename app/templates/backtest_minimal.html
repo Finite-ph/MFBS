@@ -1,0 +1,373 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}策略回测{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 24px;">
+    <h1 style="font-size: 18px; font-weight: 600;">策略回测</h1>
+    <p style="color: #666; font-size: 13px;">基于历史数据验证投资策略</p>
+</div>
+
+<!-- 回测配置 -->
+<div class="card" style="margin-bottom: 20px;">
+    <form id="backtest-form">
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px;">
+            <div>
+                <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">股票</label>
+                <select id="stock-select" style="width: 180px;">
+                    <option value="">选择股票</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">策略</label>
+                <select id="strategy-type" style="width: 150px;">
+                    <option value="">选择策略</option>
+                    <option value="ma_cross">MA交叉</option>
+                    <option value="macd">MACD</option>
+                    <option value="kdj">KDJ</option>
+                    <option value="rsi">RSI</option>
+                    <option value="bollinger">布林带</option>
+                </select>
+            </div>
+            <div>
+                <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">开始日期</label>
+                <input type="date" id="start-date" style="width: 140px;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">结束日期</label>
+                <input type="date" id="end-date" style="width: 140px;">
+            </div>
+            <div>
+                <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">资金</label>
+                <input type="number" id="initial-capital" value="100000" style="width: 100px;">
+            </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+            <button type="submit">运行回测</button>
+            <button type="button" class="secondary" id="reset-backtest">重置</button>
+        </div>
+    </form>
+</div>
+
+<!-- 策略参数 -->
+<div id="strategy-params-section" class="card" style="margin-bottom: 20px; display: none;">
+    <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px;">策略参数</div>
+    <div id="strategy-params"></div>
+</div>
+
+<!-- 结果 -->
+<div id="backtest-results" class="card" style="margin-bottom: 20px;">
+    <div style="margin-bottom: 16px;">
+        <span id="backtest-status" style="font-size: 13px; color: #666;">等待中</span>
+    </div>
+    <div id="results-content">
+        <div style="text-align: center; padding: 40px; color: #999;">配置参数并运行回测</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    initializeDates();
+    loadStockOptions();
+
+    document.getElementById('backtest-form').addEventListener('submit', handleBacktest);
+    document.getElementById('reset-backtest').addEventListener('click', resetBacktest);
+    document.getElementById('strategy-type').addEventListener('change', updateStrategyParams);
+});
+
+function initializeDates() {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setFullYear(endDate.getFullYear() - 1);
+
+    document.getElementById('end-date').value = endDate.toISOString().split('T')[0];
+    document.getElementById('start-date').value = startDate.toISOString().split('T')[0];
+}
+
+async function loadStockOptions() {
+    try {
+        const response = await apiRequest('/stocks?page_size=100');
+        if (response.code === 200) {
+            const select = document.getElementById('stock-select');
+            response.data.stocks.forEach(stock => {
+                const option = document.createElement('option');
+                option.value = stock.ts_code;
+                option.textContent = `${stock.symbol || stock.ts_code}`;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('加载股票失败:', error);
+    }
+}
+
+function updateStrategyParams() {
+    const strategyType = document.getElementById('strategy-type').value;
+    const section = document.getElementById('strategy-params-section');
+    const container = document.getElementById('strategy-params');
+
+    if (!strategyType) {
+        section.style.display = 'none';
+        return;
+    }
+
+    section.style.display = 'block';
+    let html = '';
+
+    switch (strategyType) {
+        case 'ma_cross':
+            html = `
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">短期MA</label>
+                        <input type="number" id="ma-short" value="5" style="width: 80px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">长期MA</label>
+                        <input type="number" id="ma-long" value="20" style="width: 80px;">
+                    </div>
+                </div>`;
+            break;
+        case 'macd':
+            html = `
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">快线</label>
+                        <input type="number" id="macd-fast" value="12" style="width: 80px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">慢线</label>
+                        <input type="number" id="macd-slow" value="26" style="width: 80px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">信号线</label>
+                        <input type="number" id="macd-signal" value="9" style="width: 80px;">
+                    </div>
+                </div>`;
+            break;
+        case 'kdj':
+            html = `
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">周期</label>
+                        <input type="number" id="kdj-period" value="9" style="width: 80px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">超买</label>
+                        <input type="number" id="kdj-overbought" value="80" style="width: 80px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">超卖</label>
+                        <input type="number" id="kdj-oversold" value="20" style="width: 80px;">
+                    </div>
+                </div>`;
+            break;
+        case 'rsi':
+            html = `
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">周期</label>
+                        <input type="number" id="rsi-period" value="14" style="width: 80px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">超买</label>
+                        <input type="number" id="rsi-overbought" value="70" style="width: 80px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">超卖</label>
+                        <input type="number" id="rsi-oversold" value="30" style="width: 80px;">
+                    </div>
+                </div>`;
+            break;
+        case 'bollinger':
+            html = `
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">周期</label>
+                        <input type="number" id="boll-period" value="20" style="width: 80px;">
+                    </div>
+                    <div>
+                        <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">标准差</label>
+                        <input type="number" id="boll-std" value="2" style="width: 80px;">
+                    </div>
+                </div>`;
+            break;
+    }
+
+    container.innerHTML = html;
+}
+
+async function handleBacktest(event) {
+    event.preventDefault();
+
+    const tsCode = document.getElementById('stock-select').value;
+    const strategyType = document.getElementById('strategy-type').value;
+
+    if (!tsCode || !strategyType) {
+        alert('请选择股票和策略');
+        return;
+    }
+
+    const config = {
+        ts_code: tsCode,
+        strategy_type: strategyType,
+        start_date: document.getElementById('start-date').value,
+        end_date: document.getElementById('end-date').value,
+        initial_capital: parseFloat(document.getElementById('initial-capital').value),
+        commission_rate: 0.001,
+        params: collectStrategyParams(strategyType)
+    };
+
+    document.getElementById('backtest-status').textContent = '运行中...';
+    document.getElementById('results-content').innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">正在运行回测...</div>';
+
+    try {
+        const response = await apiRequest('/analysis/backtest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            data: config
+        });
+
+        if (response.code === 200) {
+            document.getElementById('backtest-status').textContent = '完成';
+            renderBacktestResults(response.data, config);
+        } else {
+            throw new Error(response.message || '回测失败');
+        }
+    } catch (error) {
+        document.getElementById('backtest-status').textContent = '失败';
+        document.getElementById('results-content').innerHTML = `<div class="error">${error.message}</div>`;
+    }
+}
+
+function collectStrategyParams(strategyType) {
+    const params = {};
+    switch (strategyType) {
+        case 'ma_cross':
+            params.ma_short = parseInt(document.getElementById('ma-short').value);
+            params.ma_long = parseInt(document.getElementById('ma-long').value);
+            break;
+        case 'macd':
+            params.fast = parseInt(document.getElementById('macd-fast').value);
+            params.slow = parseInt(document.getElementById('macd-slow').value);
+            params.signal = parseInt(document.getElementById('macd-signal').value);
+            break;
+        case 'kdj':
+            params.period = parseInt(document.getElementById('kdj-period').value);
+            params.overbought = parseInt(document.getElementById('kdj-overbought').value);
+            params.oversold = parseInt(document.getElementById('kdj-oversold').value);
+            break;
+        case 'rsi':
+            params.period = parseInt(document.getElementById('rsi-period').value);
+            params.overbought = parseInt(document.getElementById('rsi-overbought').value);
+            params.oversold = parseInt(document.getElementById('rsi-oversold').value);
+            break;
+        case 'bollinger':
+            params.period = parseInt(document.getElementById('boll-period').value);
+            params.std_dev = parseFloat(document.getElementById('boll-std').value);
+            break;
+    }
+    return params;
+}
+
+function renderBacktestResults(results, config) {
+    const perf = results.performance;
+    const container = document.getElementById('results-content');
+
+    const html = `
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px;">
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 20px; font-weight: 600;">${formatPercent(perf.total_return)}</div>
+                <div style="font-size: 12px; color: #666;">总收益率</div>
+            </div>
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 20px; font-weight: 600;">${formatPercent(perf.annual_return)}</div>
+                <div style="font-size: 12px; color: #666;">年化收益率</div>
+            </div>
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 20px; font-weight: 600;">${formatNumber(perf.sharpe_ratio, 2)}</div>
+                <div style="font-size: 12px; color: #666;">夏普比率</div>
+            </div>
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 20px; font-weight: 600; color: #c00;">${formatPercent(perf.max_drawdown)}</div>
+                <div style="font-size: 12px; color: #666;">最大回撤</div>
+            </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px;">
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 20px; font-weight: 600;">${perf.total_trades}</div>
+                <div style="font-size: 12px; color: #666;">总交易次数</div>
+            </div>
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 20px; font-weight: 600;">${formatPercent(perf.win_rate)}</div>
+                <div style="font-size: 12px; color: #666;">胜率</div>
+            </div>
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 20px; font-weight: 600;">${formatNumber(perf.final_capital, 0)}</div>
+                <div style="font-size: 12px; color: #666;">最终资金</div>
+            </div>
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 20px; font-weight: 600;">${formatNumber(perf.volatility, 2)}%</div>
+                <div style="font-size: 12px; color: #666;">波动率</div>
+            </div>
+        </div>
+
+        ${results.trades && results.trades.length > 0 ? `
+        <div style="margin-top: 20px;">
+            <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px;">交易记录 (最近10笔)</div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>日期</th>
+                        <th>操作</th>
+                        <th>价格</th>
+                        <th>数量</th>
+                        <th>金额</th>
+                        <th>收益</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${results.trades.slice(0, 10).map(trade => `
+                        <tr>
+                            <td>${trade.date}</td>
+                            <td>${trade.action === 'buy' ? '买入' : '卖出'}</td>
+                            <td>${formatNumber(trade.price, 2)}</td>
+                            <td>${trade.quantity}</td>
+                            <td>${formatNumber(trade.amount, 0)}</td>
+                            <td>${trade.return_rate ? formatPercent(trade.return_rate) : '--'}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+        ` : ''}
+    `;
+
+    container.innerHTML = html;
+}
+
+function resetBacktest() {
+    document.getElementById('backtest-form').reset();
+    initializeDates();
+    updateStrategyParams();
+    document.getElementById('backtest-status').textContent = '等待中';
+    document.getElementById('results-content').innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">配置参数并运行回测</div>';
+}
+
+function formatNumber(num, decimals = 2) {
+    if (num === null || num === undefined || isNaN(num)) return '--';
+    return Number(num).toLocaleString('en-US', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
+}
+
+function formatPercent(num) {
+    if (num === null || num === undefined || isNaN(num)) return '--';
+    const sign = num >= 0 ? '+' : '';
+    return sign + (Number(num) * 100).toFixed(2) + '%';
+}
+</script>
+{% endblock %}

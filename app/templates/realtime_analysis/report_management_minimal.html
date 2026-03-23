@@ -1,0 +1,206 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}报告管理{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 24px;">
+    <h1 style="font-size: 18px; font-weight: 600;">报告管理</h1>
+    <p style="color: #666; font-size: 13px;">管理分析报告、模板和订阅</p>
+</div>
+
+<!-- Stats -->
+<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px;">
+    <div class="card" style="text-align: center;">
+        <div style="font-size: 20px; font-weight: 600;" id="total-reports">--</div>
+        <div style="font-size: 12px; color: #666;">总报告数</div>
+    </div>
+    <div class="card" style="text-align: center;">
+        <div style="font-size: 20px; font-weight: 600;" id="total-templates">--</div>
+        <div style="font-size: 12px; color: #666;">模板数量</div>
+    </div>
+    <div class="card" style="text-align: center;">
+        <div style="font-size: 20px; font-weight: 600;" id="total-subscriptions">--</div>
+        <div style="font-size: 12px; color: #666;">订阅数量</div>
+    </div>
+    <div class="card" style="text-align: center;">
+        <div style="font-size: 20px; font-weight: 600;" id="success-rate">--</div>
+        <div style="font-size: 12px; color: #666;">成功率</div>
+    </div>
+</div>
+
+<!-- Tabs -->
+<div class="card" style="margin-bottom: 20px;">
+    <div style="display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid #e5e5e5; padding-bottom: 12px;">
+        <button class="nav-link active" onclick="showTab('reports')">报告列表</button>
+        <button class="nav-link" onclick="showTab('templates')">模板管理</button>
+        <button class="nav-link" onclick="showTab('subscriptions')">订阅管理</button>
+        <button class="nav-link" onclick="showTab('statistics')">统计分析</button>
+    </div>
+
+    <!-- Reports Tab -->
+    <div id="tab-reports">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="font-size: 14px; font-weight: 500;">报告列表</div>
+            <select id="report-type-filter" onchange="filterReports()" style="padding: 6px 10px; font-size: 13px;">
+                <option value="">所有类型</option>
+                <option value="daily_summary">每日总结</option>
+                <option value="portfolio_analysis">组合分析</option>
+                <option value="risk_assessment">风险评估</option>
+                <option value="signal_analysis">信号分析</option>
+                <option value="market_overview">市场概览</option>
+            </select>
+        </div>
+        <div id="reports-container">
+            <div style="text-align: center; padding: 40px; color: #999;">加载报告中...</div>
+        </div>
+    </div>
+
+    <!-- Templates Tab -->
+    <div id="tab-templates" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="font-size: 14px; font-weight: 500;">模板管理</div>
+            <button onclick="showCreateTemplateModal()">创建模板</button>
+        </div>
+        <div id="templates-container">
+            <div style="text-align: center; padding: 40px; color: #999;">加载模板中...</div>
+        </div>
+    </div>
+
+    <!-- Subscriptions Tab -->
+    <div id="tab-subscriptions" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="font-size: 14px; font-weight: 500;">订阅管理</div>
+            <button onclick="showCreateSubscriptionModal()">创建订阅</button>
+        </div>
+        <div id="subscriptions-container">
+            <div style="text-align: center; padding: 40px; color: #999;">加载订阅中...</div>
+        </div>
+    </div>
+
+    <!-- Statistics Tab -->
+    <div id="tab-statistics" style="display: none;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div>
+                <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px;">报告类型分布</div>
+                <div id="report-type-chart" style="height: 300px;"></div>
+            </div>
+            <div>
+                <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px;">报告状态统计</div>
+                <div id="report-status-chart" style="height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script>
+let currentTab = 'reports';
+
+function showTab(tab) {
+    document.querySelectorAll('[id^="tab-"]').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + tab).style.display = 'block';
+    event.target.classList.add('active');
+    currentTab = tab;
+}
+
+function filterReports() {
+    // Mock implementation
+}
+
+function showCreateTemplateModal() {
+    alert('创建模板');
+}
+
+function showCreateSubscriptionModal() {
+    alert('创建订阅');
+}
+
+// Load initial data
+document.addEventListener('DOMContentLoaded', function() {
+    loadReports();
+    loadTemplates();
+    loadSubscriptions();
+});
+
+async function loadReports() {
+    try {
+        const response = await fetch('/api/realtime-analysis/reports/reports');
+        const result = await response.json();
+        if (result.success) {
+            renderReports(result.data);
+        } else {
+            document.getElementById('reports-container').innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">加载报告失败</div>';
+        }
+    } catch (error) {
+        document.getElementById('reports-container').innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">加载报告失败</div>';
+    }
+}
+
+function renderReports(reports) {
+    const container = document.getElementById('reports-container');
+    if (!reports || reports.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">暂无报告</div>';
+        return;
+    }
+    container.innerHTML = `
+        <table>
+            <thead><tr><th>名称</th><th>类型</th><th>状态</th><th>生成时间</th><th>操作</th></tr></thead>
+            <tbody>
+                ${reports.map(r => `
+                    <tr>
+                        <td>${r.report_name || '-'}</td>
+                        <td>${r.report_type || '-'}</td>
+                        <td><span class="badge ${r.report_status === 'completed' ? 'green' : r.report_status === 'failed' ? 'red' : ''}">${r.report_status || '-'}</span></td>
+                        <td>${r.generated_at ? new Date(r.generated_at).toLocaleString() : '-'}</td>
+                        <td><a href="#">查看</a> <a href="#">删除</a></td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+async function loadTemplates() {
+    try {
+        const response = await fetch('/api/realtime-analysis/reports/templates');
+        const result = await response.json();
+        if (result.success) {
+            renderTemplates(result.data);
+        }
+    } catch (error) {
+        console.error('加载模板失败');
+    }
+}
+
+function renderTemplates(templates) {
+    const container = document.getElementById('templates-container');
+    if (!templates || templates.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">暂无模板</div>';
+        return;
+    }
+    container.innerHTML = `
+        <table>
+            <thead><tr><th>名称</th><th>类型</th><th>默认</th><th>启用</th><th>操作</th></tr></thead>
+            <tbody>
+                ${templates.map(t => `
+                    <tr>
+                        <td>${t.template_name || '-'}</td>
+                        <td>${t.template_type || '-'}</td>
+                        <td>${t.is_default ? '是' : '否'}</td>
+                        <td>${t.is_active ? '是' : '否'}</td>
+                        <td><a href="#">编辑</a> <a href="#">删除</a></td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+async function loadSubscriptions() {
+    document.getElementById('subscriptions-container').innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">暂无订阅</div>';
+}
+</script>
+{% endblock %}

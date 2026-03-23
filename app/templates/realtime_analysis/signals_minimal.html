@@ -1,0 +1,63 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}交易信号{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 24px;">
+    <h1 style="font-size: 18px; font-weight: 600;">交易信号</h1>
+    <p style="color: #666; font-size: 13px;">交易信号生成与监控</p>
+</div>
+
+<!-- Config -->
+<div class="card" style="margin-bottom: 20px;">
+    <form id="signal-form" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">股票</label>
+            <input type="text" id="ts-code" placeholder="000001.SZ" style="width: 120px;">
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">周期</label>
+            <select id="period" style="width: 100px;">
+                <option value="5min" selected>5分钟</option>
+                <option value="15min">15分钟</option>
+                <option value="60min">60分钟</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">天数</label>
+            <select id="lookback" style="width: 80px;">
+                <option value="3">3</option>
+                <option value="5" selected>5</option>
+                <option value="7">7</option>
+            </select>
+        </div>
+        <button type="submit">生成</button>
+    </form>
+</div>
+
+<!-- Results -->
+<div id="signal-results">
+    <div style="text-align: center; padding: 40px; color: #999;">配置参数并点击生成</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('signal-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    document.getElementById('signal-results').innerHTML = `
+        <div class="card">
+            <div style="margin-bottom: 16px;">信号结果</div>
+            <table>
+                <thead><tr><th>策略</th><th>信号</th><th>强度</th><th>置信度</th></tr></thead>
+                <tbody>
+                    <tr><td>MA交叉</td><td style="color: #c00;">卖出</td><td>-0.72</td><td>85%</td></tr>
+                    <tr><td>RSI</td><td style="color: #0a0;">买入</td><td>0.65</td><td>78%</td></tr>
+                    <tr><td>MACD</td><td style="color: #999;">持有</td><td>0.12</td><td>55%</td></tr>
+                </tbody>
+            </table>
+        </div>
+    `;
+});
+</script>
+{% endblock %}

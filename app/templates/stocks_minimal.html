@@ -1,0 +1,165 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}股票列表{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 24px;">
+    <h1 style="font-size: 18px; font-weight: 600;">股票列表</h1>
+    <p style="color: #666; font-size: 13px;">总计: <span id="total-count">--</span></p>
+</div>
+
+<!-- 筛选表单 -->
+<div class="card" style="margin-bottom: 20px;">
+    <form id="filter-form" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">行业</label>
+            <select id="industry-select" style="width: 150px;">
+                <option value="">全部</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">地区</label>
+            <select id="area-select" style="width: 120px;">
+                <option value="">全部</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">搜索</label>
+            <input type="text" id="search-input" placeholder="代码或名称" style="width: 150px;">
+        </div>
+        <button type="submit">筛选</button>
+        <button type="button" class="secondary" id="reset-btn">重置</button>
+    </form>
+</div>
+
+<!-- 股票列表 -->
+<div id="stocks-container">
+    <div class="loading">加载中...</div>
+</div>
+
+<!-- 分页 -->
+<div id="pagination" style="margin-top: 20px; display: flex; gap: 8px; justify-content: center;">
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentPage = 1;
+let currentFilters = {};
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadIndustries();
+    loadStocks();
+
+    document.getElementById('filter-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        currentFilters = {
+            industry: document.getElementById('industry-select').value,
+            area: document.getElementById('area-select').value,
+            search: document.getElementById('search-input').value
+        };
+        currentPage = 1;
+        loadStocks();
+    });
+
+    document.getElementById('reset-btn').addEventListener('click', function() {
+        document.getElementById('industry-select').value = '';
+        document.getElementById('area-select').value = '';
+        document.getElementById('search-input').value = '';
+        currentFilters = {};
+        currentPage = 1;
+        loadStocks();
+    });
+});
+
+async function loadIndustries() {
+    try {
+        const res = await apiRequest('/industries');
+        if (res.code === 200) {
+            const select = document.getElementById('industry-select');
+            res.data.forEach(ind => {
+                select.innerHTML += `<option value="${ind}">${ind}</option>`;
+            });
+        }
+    } catch (error) {
+        console.error('加载行业失败:', error);
+    }
+}
+
+async function loadStocks() {
+    showLoading('stocks-container');
+    try {
+        let url = `/stocks?page=${currentPage}&page_size=20`;
+        if (currentFilters.industry) url += `&industry=${encodeURIComponent(currentFilters.industry)}`;
+        if (currentFilters.area) url += `&area=${encodeURIComponent(currentFilters.area)}`;
+        if (currentFilters.search) url += `&search=${encodeURIComponent(currentFilters.search)}`;
+
+        const res = await apiRequest(url);
+        if (res.code === 200) {
+            document.getElementById('total-count').textContent = res.data.total;
+            renderStocks(res.data.stocks);
+            renderPagination(res.data.total, res.data.page, res.data.pages);
+        }
+    } catch (error) {
+        showError('stocks-container', '加载股票失败');
+    }
+}
+
+function renderStocks(stocks) {
+    const container = document.getElementById('stocks-container');
+    if (!stocks || stocks.length === 0) {
+        container.innerHTML = '<div class="error">未找到股票</div>';
+        return;
+    }
+
+    let html = `
+        <table>
+            <thead>
+                <tr>
+                    <th>代码</th>
+                    <th>名称</th>
+                    <th>行业</th>
+                    <th>地区</th>
+                    <th>上市日期</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    stocks.forEach(stock => {
+        html += `
+            <tr>
+                <td><a href="/stock/${stock.ts_code}">${stock.ts_code}</a></td>
+                <td>${stock.symbol || '--'}</td>
+                <td>${stock.industry || '--'}</td>
+                <td>${stock.area || '--'}</td>
+                <td>${stock.list_date || '--'}</td>
+            </tr>
+        `;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function renderPagination(total, page, pages) {
+    const container = document.getElementById('pagination');
+    if (pages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+    for (let i = 1; i <= pages; i++) {
+        html += `<button class="${i === page ? '' : 'secondary'}" onclick="goToPage(${i})" style="padding: 4px 10px;">${i}</button>`;
+    }
+    container.innerHTML = html;
+}
+
+function goToPage(page) {
+    currentPage = page;
+    loadStocks();
+    window.scrollTo(0, 0);
+}
+</script>
+{% endblock %}

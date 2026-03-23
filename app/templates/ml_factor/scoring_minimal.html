@@ -1,0 +1,119 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}股票评分{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 24px;">
+    <h1 style="font-size: 18px; font-weight: 600;">股票评分</h1>
+    <p style="color: #666; font-size: 13px;">基于多因子的股票排名</p>
+</div>
+
+<!-- Config -->
+<div class="card" style="margin-bottom: 20px;">
+    <form id="scoring-form" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">日期</label>
+            <input type="date" id="trade-date" style="width: 140px;">
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">方法</label>
+            <select id="scoring-method" style="width: 140px;">
+                <option value="factor_based">因子驱动</option>
+                <option value="ml_based">机器学习</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">Top N</label>
+            <select id="top-n" style="width: 100px;">
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+            </select>
+        </div>
+        <button type="submit">计算</button>
+    </form>
+</div>
+
+<!-- Results -->
+<div class="card">
+    <div style="margin-bottom: 16px;">结果: <span id="result-count">0</span></div>
+    <div id="scoring-results">
+        <div style="text-align: center; padding: 40px; color: #999;">配置参数并点击计算</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('trade-date').value = new Date().toISOString().split('T')[0];
+});
+
+document.getElementById('scoring-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const method = document.getElementById('scoring-method').value;
+    const topN = parseInt(document.getElementById('top-n').value);
+
+    showLoading('scoring-results');
+
+    try {
+        const res = await apiRequest('/ml-factor/scoring/factor-based', {
+            method: 'POST',
+            data: {
+                trade_date: '2025-05-23',
+                factor_list: ['momentum_5d', 'money_flow_strength', 'momentum_20d'],
+                top_n: topN
+            }
+        });
+
+        if (res.success) {
+            document.getElementById('result-count').textContent = res.top_stocks?.length || 0;
+            renderResults(res.top_stocks || []);
+        } else {
+            showError('scoring-results', '评分失败');
+        }
+    } catch (error) {
+        showError('scoring-results', 'Scoring failed');
+    }
+});
+
+function renderResults(stocks) {
+    const container = document.getElementById('scoring-results');
+
+    if (stocks.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">无结果</div>';
+        return;
+    }
+
+    let html = `
+        <table>
+            <thead>
+                <tr>
+                    <th>排名</th>
+                    <th>代码</th>
+                    <th>名称</th>
+                    <th>评分</th>
+                    <th>行业</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    stocks.forEach((s, i) => {
+        html += `
+            <tr>
+                <td>${i + 1}</td>
+                <td><a href="/stock/${s.ts_code}">${s.ts_code}</a></td>
+                <td>${s.name || '--'}</td>
+                <td>${s.composite_score?.toFixed(3) || '--'}</td>
+                <td>${s.industry || '--'}</td>
+            </tr>
+        `;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+</script>
+{% endblock %}

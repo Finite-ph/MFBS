@@ -1,0 +1,312 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}多因子回测{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 24px;">
+    <h1 style="font-size: 18px; font-weight: 600;">多因子回测</h1>
+    <p style="color: #666; font-size: 13px;">基于多因子模型的组合回测系统</p>
+</div>
+
+<!-- 回测配置 -->
+<div class="card" style="margin-bottom: 20px;">
+    <form id="backtest-form" style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">开始日期</label>
+            <input type="date" id="start-date" style="width: 140px;">
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">结束日期</label>
+            <input type="date" id="end-date" style="width: 140px;">
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">初始资金</label>
+            <input type="number" id="initial-capital" value="1000000" style="width: 120px;">
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">调仓频率</label>
+            <select id="rebalance-freq" style="width: 100px;">
+                <option value="daily">每日</option>
+                <option value="weekly">每周</option>
+                <option value="monthly" selected>每月</option>
+                <option value="quarterly">每季</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">选股方法</label>
+            <select id="selection-method" style="width: 120px;">
+                <option value="factor_based" selected>因子驱动</option>
+                <option value="ml_based">机器学习</option>
+            </select>
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">股票数量</label>
+            <input type="number" id="stock-count" value="50" style="width: 80px;">
+        </div>
+        <div>
+            <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">基准</label>
+            <select id="benchmark" style="width: 120px;">
+                <option value="000300.SH">沪深300</option>
+                <option value="000905.SH">中证500</option>
+                <option value="000852.SH">中证1000</option>
+                <option value="399006.SZ">创业板</option>
+            </select>
+        </div>
+        <button type="submit">运行回测</button>
+        <button type="button" class="secondary" id="reset-backtest">重置</button>
+    </form>
+</div>
+
+<!-- 因子选择 -->
+<div class="card" style="margin-bottom: 20px;">
+    <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px;">选择因子</div>
+    <div id="factor-list" style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+            <input type="checkbox" value="momentum_5d" checked> 5日动量
+        </label>
+        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+            <input type="checkbox" value="momentum_20d" checked> 20日动量
+        </label>
+        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+            <input type="checkbox" value="money_flow_strength" checked> 资金流强度
+        </label>
+        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+            <input type="checkbox" value="chip_concentration"> 筹码集中度
+        </label>
+        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+            <input type="checkbox" value="volatility_20d"> 20日波动率
+        </label>
+        <label style="display: flex; align-items: center; gap: 4px; cursor: pointer;">
+            <input type="checkbox" value="price_ma_ratio"> 价格均线比
+        </label>
+    </div>
+</div>
+
+<!-- 结果 -->
+<div id="backtest-results" class="card" style="margin-bottom: 20px; display: none;">
+    <div style="margin-bottom: 16px;">
+        <span id="backtest-status" style="font-size: 13px; color: #666;">等待中</span>
+    </div>
+    <div id="results-content">
+        <div style="text-align: center; padding: 40px; color: #999;">配置参数并运行回测</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    initializeDates();
+    document.getElementById('backtest-form').addEventListener('submit', handleBacktest);
+    document.getElementById('reset-backtest').addEventListener('click', resetBacktest);
+});
+
+function initializeDates() {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setFullYear(endDate.getFullYear() - 1);
+    document.getElementById('end-date').value = endDate.toISOString().split('T')[0];
+    document.getElementById('start-date').value = startDate.toISOString().split('T')[0];
+}
+
+async function handleBacktest(event) {
+    event.preventDefault();
+
+    const selectedFactors = Array.from(document.querySelectorAll('#factor-list input:checked')).map(cb => cb.value);
+
+    if (selectedFactors.length === 0) {
+        alert('请至少选择一个因子');
+        return;
+    }
+
+    const config = {
+        strategy_config: {
+            selection_method: document.getElementById('selection-method').value,
+            factor_list: selectedFactors,
+            top_n: parseInt(document.getElementById('stock-count').value),
+            weights: {},
+            optimization: {
+                method: 'equal_weight'
+            }
+        },
+        start_date: document.getElementById('start-date').value,
+        end_date: document.getElementById('end-date').value,
+        initial_capital: parseFloat(document.getElementById('initial-capital').value),
+        rebalance_frequency: document.getElementById('rebalance-freq').value
+    };
+
+    document.getElementById('backtest-results').style.display = 'block';
+    document.getElementById('backtest-status').textContent = '运行中...';
+    document.getElementById('results-content').innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">正在运行回测...</div>';
+
+    try {
+        const response = await apiRequest('/ml-factor/backtest/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            data: config
+        });
+
+        if (response.success) {
+            document.getElementById('backtest-status').textContent = '完成';
+            renderBacktestResults(response);
+        } else {
+            throw new Error(response.error || '回测失败');
+        }
+    } catch (error) {
+        document.getElementById('backtest-status').textContent = '失败';
+        document.getElementById('results-content').innerHTML = `<div class="error">${error.message}</div>`;
+    }
+}
+
+function renderBacktestResults(result) {
+    const perf = result.performance_metrics;
+    const container = document.getElementById('results-content');
+
+    if (!perf || !result.portfolio_values || result.portfolio_values.length === 0) {
+        container.innerHTML = '<div class="error">回测结果为空，请检查数据</div>';
+        return;
+    }
+
+    const html = `
+        <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px;">
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 16px; font-weight: 600;">${formatPercent(perf.total_return)}</div>
+                <div style="font-size: 11px; color: #666;">总收益率</div>
+            </div>
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 16px; font-weight: 600;">${formatPercent(perf.annualized_return)}</div>
+                <div style="font-size: 11px; color: #666;">年化收益率</div>
+            </div>
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 16px; font-weight: 600;">${formatNumber(perf.sharpe_ratio, 2)}</div>
+                <div style="font-size: 11px; color: #666;">夏普比率</div>
+            </div>
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 16px; font-weight: 600; color: #c00;">${formatPercent(perf.max_drawdown)}</div>
+                <div style="font-size: 11px; color: #666;">最大回撤</div>
+            </div>
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 16px; font-weight: 600;">${formatPercent(perf.win_rate)}</div>
+                <div style="font-size: 11px; color: #666;">胜率</div>
+            </div>
+            <div class="card" style="text-align: center;">
+                <div style="font-size: 16px; font-weight: 600;">${formatNumber(perf.volatility * 100, 2)}%</div>
+                <div style="font-size: 11px; color: #666;">波动率</div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px;">
+            <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px;">累计收益曲线</div>
+            <div id="returns-chart" style="height: 300px;"></div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+            <div class="card">
+                <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px;">回撤</div>
+                <div id="drawdown-chart" style="height: 250px;"></div>
+            </div>
+            <div class="card">
+                <div style="font-size: 14px; font-weight: 500; margin-bottom: 12px;">月度收益</div>
+                <div id="monthly-chart" style="height: 250px;"></div>
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+
+    // 渲染图表
+    renderReturnsChart(result.portfolio_values);
+    renderDrawdownChart(result.portfolio_values);
+    renderMonthlyChart(result.daily_returns);
+}
+
+function renderReturnsChart(portfolioValues) {
+    const chart = echarts.init(document.getElementById('returns-chart'));
+    const dates = portfolioValues.map(pv => pv.date);
+    const values = portfolioValues.map(pv => pv.total_value);
+    const initialValue = values[0];
+    const returns = values.map(v => (v - initialValue) / initialValue * 100);
+
+    chart.setOption({
+        tooltip: { trigger: 'axis' },
+        legend: { data: ['组合收益'], bottom: 0 },
+        xAxis: { type: 'category', data: dates },
+        yAxis: { type: 'value', axisLabel: { formatter: v => v.toFixed(1) + '%' } },
+        series: [{
+            name: '组合收益',
+            type: 'line',
+            data: returns,
+            lineStyle: { width: 2 },
+            areaStyle: { color: 'rgba(0,0,0,0.05)' }
+        }]
+    });
+}
+
+function renderDrawdownChart(portfolioValues) {
+    const chart = echarts.init(document.getElementById('drawdown-chart'));
+    const values = portfolioValues.map(pv => pv.total_value);
+    let peak = values[0];
+    const drawdowns = [];
+    values.forEach(v => {
+        if (v > peak) peak = v;
+        drawdowns.push(((v - peak) / peak) * 100);
+    });
+
+    chart.setOption({
+        tooltip: { trigger: 'axis' },
+        xAxis: { type: 'category', data: portfolioValues.map((_, i) => i) },
+        yAxis: { type: 'value', axisLabel: { formatter: v => v.toFixed(1) + '%' } },
+        series: [{
+            type: 'line',
+            data: drawdowns,
+            areaStyle: { color: 'rgba(0,0,0,0.05)' },
+            lineStyle: { color: '#333' }
+        }]
+    });
+}
+
+function renderMonthlyChart(dailyReturns) {
+    const chart = echarts.init(document.getElementById('monthly-chart'));
+    const monthlyReturns = [];
+    for (let i = 0; i < 12; i++) {
+        const start = Math.floor(i * dailyReturns.length / 12);
+        const end = Math.floor((i + 1) * dailyReturns.length / 12);
+        const monthReturns = dailyReturns.slice(start, end);
+        const monthReturn = monthReturns.reduce((a, b) => a + b, 0) * 100;
+        monthlyReturns.push({ value: monthReturn, name: (i + 1) + '月' });
+    }
+
+    chart.setOption({
+        tooltip: { trigger: 'axis' },
+        xAxis: { type: 'category', data: monthlyReturns.map(d => d.name) },
+        yAxis: { type: 'value', axisLabel: { formatter: v => v.toFixed(1) + '%' } },
+        series: [{
+            type: 'bar',
+            data: monthlyReturns.map(d => d.value.toFixed(2))
+        }]
+    });
+}
+
+function resetBacktest() {
+    document.getElementById('backtest-form').reset();
+    initializeDates();
+    document.getElementById('backtest-results').style.display = 'none';
+    document.getElementById('backtest-status').textContent = '等待中';
+}
+
+function formatNumber(num, decimals = 2) {
+    if (num === null || num === undefined || isNaN(num)) return '--';
+    return Number(num).toLocaleString('en-US', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
+}
+
+function formatPercent(num) {
+    if (num === null || num === undefined || isNaN(num)) return '--';
+    const sign = num >= 0 ? '+' : '';
+    return sign + (num * 100).toFixed(2) + '%';
+}
+</script>
+{% endblock %}

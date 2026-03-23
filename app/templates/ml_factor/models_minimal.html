@@ -1,0 +1,81 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}机器学习模型{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 24px;">
+    <h1 style="font-size: 18px; font-weight: 600;">机器学习模型</h1>
+    <p style="color: #666; font-size: 13px;">总计: <span id="total-count">--</span> 个模型</p>
+</div>
+
+<!-- Model List -->
+<div id="models-container">
+    <div class="loading">加载中...</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let allModels = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadModels();
+});
+
+async function loadModels() {
+    try {
+        const res = await apiRequest('/ml-factor/models/list');
+        if (res.success) {
+            allModels = res.models || [];
+            document.getElementById('total-count').textContent = allModels.length;
+            renderModels(allModels);
+        } else {
+            showError('models-container', '加载模型失败');
+        }
+    } catch (error) {
+        showError('models-container', 'Failed to load models');
+    }
+}
+
+function renderModels(models) {
+    const container = document.getElementById('models-container');
+
+    if (models.length === 0) {
+        container.innerHTML = '<div class="error">未找到模型</div>';
+        return;
+    }
+
+    let html = `
+        <table>
+            <thead>
+                <tr>
+                    <th>模型ID</th>
+                    <th>名称</th>
+                    <th>类型</th>
+                    <th>目标</th>
+                    <th>状态</th>
+                    <th>准确率</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    models.forEach(m => {
+        const statusColors = {trained: '#0a0', training: '#c00', active: '#0066cc'};
+        html += `
+            <tr>
+                <td><code>${m.model_id}</code></td>
+                <td>${m.model_name}</td>
+                <td>${m.model_type}</td>
+                <td>${m.target_type}</td>
+                <td style="color: ${statusColors[m.status] || '#666'}">${m.status || '--'}</td>
+                <td>${m.accuracy ? (m.accuracy * 100).toFixed(1) + '%' : '--'}</td>
+            </tr>
+        `;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+</script>
+{% endblock %}

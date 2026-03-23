@@ -1,0 +1,270 @@
+{% extends "base_minimal.html" %}
+
+{% block title %}股票筛选{% endblock %}
+
+{% block content %}
+<div style="margin-bottom: 24px;">
+    <h1 style="font-size: 18px; font-weight: 600;">股票筛选</h1>
+    <p style="color: #666; font-size: 13px;">基于业务数据的多因子筛选</p>
+</div>
+
+<!-- 筛选表单 -->
+<div class="card" style="margin-bottom: 20px;">
+    <form id="screen-form">
+        <!-- 基本筛选 -->
+        <div style="margin-bottom: 16px;">
+            <div style="font-size: 13px; font-weight: 500; color: #666; margin-bottom: 12px;">基本条件</div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;">
+                <div>
+                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">行业</label>
+                    <select id="industry-filter" style="width: 140px;">
+                        <option value="">全部</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">地区</label>
+                    <select id="area-filter" style="width: 120px;">
+                        <option value="">全部</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">市场</label>
+                    <select id="market-filter" style="width: 100px;">
+                        <option value="">全部</option>
+                        <option value="SZ">深圳</option>
+                        <option value="SH">上海</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- 估值筛选 -->
+        <div style="margin-bottom: 16px;">
+            <div style="font-size: 13px; font-weight: 500; color: #666; margin-bottom: 12px;">估值指标</div>
+            <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end;">
+                <div>
+                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">市盈率PE</label>
+                    <div style="display: flex; gap: 4px; align-items: center;">
+                        <input type="number" id="pe-min" placeholder="最小" style="width: 70px;">
+                        <span>-</span>
+                        <input type="number" id="pe-max" placeholder="最大" style="width: 70px;">
+                    </div>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">市净率PB</label>
+                    <div style="display: flex; gap: 4px; align-items: center;">
+                        <input type="number" id="pb-min" placeholder="最小" style="width: 70px;">
+                        <span>-</span>
+                        <input type="number" id="pb-max" placeholder="最大" style="width: 70px;">
+                    </div>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">市销率PS</label>
+                    <div style="display: flex; gap: 4px; align-items: center;">
+                        <input type="number" id="ps-min" placeholder="最小" style="width: 70px;">
+                        <span>-</span>
+                        <input type="number" id="ps-max" placeholder="最大" style="width: 70px;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 市场交易筛选 -->
+        <div style="margin-bottom: 16px;">
+            <div style="font-size: 13px; font-weight: 500; color: #666; margin-bottom: 12px;">市场交易</div>
+            <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end;">
+                <div>
+                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">市值(万)</label>
+                    <div style="display: flex; gap: 4px; align-items: center;">
+                        <input type="number" id="mv-min" placeholder="最小" style="width: 80px;">
+                        <span>-</span>
+                        <input type="number" id="mv-max" placeholder="最大" style="width: 80px;">
+                    </div>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">换手率(%)</label>
+                    <div style="display: flex; gap: 4px; align-items: center;">
+                        <input type="number" id="turnover-min" placeholder="最小" style="width: 70px;">
+                        <span>-</span>
+                        <input type="number" id="turnover-max" placeholder="最大" style="width: 70px;">
+                    </div>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 12px; color: #666; margin-bottom: 4px;">量比</label>
+                    <div style="display: flex; gap: 4px; align-items: center;">
+                        <input type="number" id="volume-ratio-min" placeholder="最小" style="width: 70px;">
+                        <span>-</span>
+                        <input type="number" id="volume-ratio-max" placeholder="最大" style="width: 70px;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 按钮 -->
+        <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button type="submit">筛选</button>
+            <button type="button" class="secondary" id="reset-screen">重置</button>
+        </div>
+    </form>
+</div>
+
+<!-- 结果 -->
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <span>结果: <span id="result-count">0</span></span>
+    </div>
+    <div id="screen-results">
+        <div style="text-align: center; padding: 40px; color: #999;">设置筛选条件并点击筛选</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadFilterOptions();
+
+    document.getElementById('screen-form').addEventListener('submit', handleScreen);
+    document.getElementById('reset-screen').addEventListener('click', resetScreen);
+});
+
+async function loadFilterOptions() {
+    try {
+        const industriesRes = await apiRequest('/industries');
+        if (industriesRes.code === 200) {
+            const select = document.getElementById('industry-filter');
+            industriesRes.data.forEach(ind => {
+                select.innerHTML += `<option value="${ind}">${ind}</option>`;
+            });
+        }
+
+        const areasRes = await apiRequest('/areas');
+        if (areasRes.code === 200) {
+            const select = document.getElementById('area-filter');
+            areasRes.data.forEach(area => {
+                select.innerHTML += `<option value="${area}">${area}</option>`;
+            });
+        }
+    } catch (error) {
+        console.error('加载选项失败:', error);
+    }
+}
+
+function handleScreen(event) {
+    event.preventDefault();
+
+    const criteria = {
+        industry: document.getElementById('industry-filter').value,
+        area: document.getElementById('area-filter').value,
+        market: document.getElementById('market-filter').value,
+        pe_min: document.getElementById('pe-min').value,
+        pe_max: document.getElementById('pe-max').value,
+        pb_min: document.getElementById('pb-min').value,
+        pb_max: document.getElementById('pb-max').value,
+        ps_min: document.getElementById('ps-min').value,
+        ps_max: document.getElementById('ps-max').value,
+        mv_min: document.getElementById('mv-min').value,
+        mv_max: document.getElementById('mv-max').value,
+        turnover_min: document.getElementById('turnover-min').value,
+        turnover_max: document.getElementById('turnover-max').value,
+        volume_ratio_min: document.getElementById('volume-ratio-min').value,
+        volume_ratio_max: document.getElementById('volume-ratio-max').value
+    };
+
+    performScreen(criteria);
+}
+
+async function performScreen(criteria) {
+    showLoading('screen-results');
+
+    try {
+        const response = await apiRequest('/analysis/screen', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            data: criteria
+        });
+
+        if (response.code === 200) {
+            document.getElementById('result-count').textContent = response.data.total;
+            renderScreenResults(response.data.stocks);
+        } else {
+            showError('screen-results', response.message || '筛选失败');
+        }
+    } catch (error) {
+        showError('screen-results', '筛选失败');
+    }
+}
+
+function renderScreenResults(stocks) {
+    const container = document.getElementById('screen-results');
+
+    if (!stocks || stocks.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">未找到股票</div>';
+        return;
+    }
+
+    let html = `
+        <table>
+            <thead>
+                <tr>
+                    <th>代码</th>
+                    <th>名称</th>
+                    <th>行业</th>
+                    <th>价格</th>
+                    <th>涨跌幅</th>
+                    <th>PE</th>
+                    <th>PB</th>
+                    <th>市值</th>
+                    <th>换手率</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    stocks.forEach(stock => {
+        const change = stock.factor_pct_change;
+        const changeColor = change >= 0 ? '#c00' : '#0a0';
+        html += `
+            <tr>
+                <td><a href="/stock/${stock.ts_code}">${stock.symbol || stock.ts_code}</a></td>
+                <td>${stock.stock_name || stock.name || '--'}</td>
+                <td>${stock.industry || '--'}</td>
+                <td>${stock.daily_close ? formatNumber(stock.daily_close, 2) : '--'}</td>
+                <td style="color: ${changeColor}">${change ? change.toFixed(2) + '%' : '--'}</td>
+                <td>${stock.pe ? formatNumber(stock.pe, 2) : '--'}</td>
+                <td>${stock.pb ? formatNumber(stock.pb, 2) : '--'}</td>
+                <td>${stock.total_mv ? formatNumber(stock.total_mv, 0) : '--'}</td>
+                <td>${stock.turnover_rate ? formatNumber(stock.turnover_rate, 2) : '--'}</td>
+            </tr>
+        `;
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+function resetScreen() {
+    document.getElementById('screen-form').reset();
+    document.getElementById('screen-results').innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">设置筛选条件并点击筛选</div>';
+    document.getElementById('result-count').textContent = '0';
+}
+
+function showLoading(containerId) {
+    const el = document.getElementById(containerId);
+    if (el) el.innerHTML = '<div style="text-align: center; padding: 40px; color: #999;">加载中...</div>';
+}
+
+function showError(containerId, message) {
+    const el = document.getElementById(containerId);
+    if (el) el.innerHTML = `<div class="error">${message}</div>`;
+}
+
+function formatNumber(num, decimals = 2) {
+    if (num === null || num === undefined || isNaN(num)) return '--';
+    return Number(num).toLocaleString('en-US', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
+}
+</script>
+{% endblock %}
